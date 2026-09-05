@@ -17,6 +17,8 @@ concurrency:
 jobs:
   refresh-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      CF_TOKEN_SET: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,7 +55,7 @@ jobs:
         run: git push
 
       - name: 部署到 Cloudflare Workers（rank.svenrogue.top）
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && (steps.commit.outputs.changed == 'true' || github.event_name != 'schedule') }}
+        if: env.CF_TOKEN_SET == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name != 'schedule')
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 2436df498e34aef84f6add92284ef920
