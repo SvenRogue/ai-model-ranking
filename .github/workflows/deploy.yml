@@ -1,0 +1,60 @@
+name: refresh-and-deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 */2 * * *"   # 每 2 小时自动刷新快照数据
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-and-deploy
+  cancel-in-progress: false
+
+jobs:
+  refresh-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 刷新快照数据（OpenRouter 实时用量）
+        run: python build_snapshot.py --refresh
+
+      - name: 同步部署目录 dist/
+        run: |
+          cp index.html snapshot.js README.md dist/
+
+      - name: 提交数据更新
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "快照无变化"
+          else
+            git add snapshot.js
+            git commit -m "chore: 刷新快照数据 [skip ci]"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "快照已更新"
+          fi
+
+      - name: 推送到 GitHub
+        if: steps.commit.outputs.changed == 'true'
+        run: git push
+
+      - name: 部署到 Cloudflare Workers（rank.svenrogue.top）
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && (steps.commit.outputs.changed == 'true' || github.event_name != 'schedule') }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 2436df498e34aef84f6add92284ef920
+        run: npx --yes wrangler@latest deploy --config worker/wrangler.jsonc
