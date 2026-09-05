@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>全球大模型实时热度榜 · LLM Live Rankings</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23818cf8'/%3E%3Cstop offset='.5' stop-color='%23c084fc'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Cpath d='M20 14h24v6a12 12 0 0 1-24 0v-6zm-8 4h6v2a10 10 0 0 1-6 9.2V18zm40 0h-6v2a10 10 0 0 0 6 9.2V18zM29 34h6v8h6v6H23v-6h6v-8z' fill='%23fff'/%3E%3C/svg%3E">
+<script src="snapshot.js"></script>
+<style>
+:root{
+  --bg:#04060f; --card:rgba(255,255,255,.045); --card2:rgba(255,255,255,.07);
+  --border:rgba(255,255,255,.09); --border2:rgba(255,255,255,.16);
+  --txt:#e9edf8; --sub:#98a0ba; --dim:#6b7490;
+  --a1:#818cf8; --a2:#c084fc; --a3:#22d3ee;
+  --grad:linear-gradient(120deg,#818cf8,#c084fc 50%,#22d3ee);
+  --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+  --gold:linear-gradient(135deg,#fde68a,#f59e0b);
+  --silver:linear-gradient(135deg,#e5e7eb,#94a3b8);
+  --bronze:linear-gradient(135deg,#fcd9b8,#d97706);
+  --r:18px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg); color:var(--txt); min-height:100vh;
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei UI","Microsoft YaHei","Segoe UI",system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+::selection{background:rgba(129,140,248,.35)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:99px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.22)}
+
+/* ---------- 背景 ---------- */
+.bg{position:fixed;inset:0;z-index:-2;background:var(--bg);overflow:hidden}
+.orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;will-change:transform}
+.orb1{width:620px;height:620px;left:-180px;top:-220px;background:radial-gradient(circle,#4338ca 0%,transparent 65%);animation:drift1 26s ease-in-out infinite alternate}
+.orb2{width:540px;height:540px;right:-140px;top:12%;background:radial-gradient(circle,#0e7490 0%,transparent 65%);animation:drift2 32s ease-in-out infinite alternate}
+.orb3{width:520px;height:520px;left:32%;bottom:-260px;background:radial-gradient(circle,#7e22ce 0%,transparent 65%);animation:drift3 38s ease-in-out infinite alternate;opacity:.35}
+@keyframes drift1{to{transform:translate(90px,60px) scale(1.12)}}
+@keyframes drift2{to{transform:translate(-70px,90px) scale(.94)}}
+@keyframes drift3{to{transform:translate(60px,-70px) scale(1.08)}}
+.bg::after{content:"";position:absolute;inset:0;
+  background-image:linear-gradient(rgba(255,255,255,.032) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.032) 1px,transparent 1px);
+  background-size:44px 44px;
+  mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 30%,transparent 75%)}
+.noise{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.028;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ---------- 顶栏 ---------- */
+.topbar{position:sticky;top:0;z-index:50;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  background:rgba(4,6,15,.72);border-bottom:1px solid rgba(255,255,255,.07)}
+.topbar-in{max-width:1240px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:11px;font-weight:800;font-size:17px;letter-spacing:.2px}
+.logo-mark{width:34px;height:34px;border-radius:10px;background:var(--grad);display:grid;place-items:center;
+  font-size:17px;box-shadow:0 4px 18px rgba(139,92,246,.45);animation:pulseGlow 3.2s ease-in-out infinite}
+@keyframes pulseGlow{50%{box-shadow:0 4px 30px rgba(192,132,252,.65)}}
+.spacer{flex:1}
+.live{display:flex;align-items:center;gap:8px;height:34px;padding:0 13px;border-radius:99px;
+  background:rgba(52,211,153,.09);border:1px solid rgba(52,211,153,.25);font-size:12.5px;color:#a7f3d0;white-space:nowrap}
+.live .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);position:relative}
+.live .dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--ok);animation:ping 1.6s cubic-bezier(0,0,.2,1) infinite}
+.live.err{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3);color:#fde68a}
+.live.err .dot{background:var(--warn)}
+.live.err .dot::after{border-color:var(--warn)}
+@keyframes ping{75%,100%{transform:scale(2);opacity:0}}
+.live b{font-weight:700}
+.countdown{color:rgba(255,255,255,.45);font-variant-numeric:tabular-nums}
+.icon-btn{width:34px;height:34px;border-radius:10px;border:1px solid var(--border2);background:var(--card);
+  color:var(--txt);cursor:pointer;display:grid;place-items:center;transition:.25s}
+.icon-btn:hover{background:var(--card2);transform:translateY(-1px)}
+.icon-btn svg{width:16px;height:16px}
+.icon-btn.spin svg{animation:rot 1s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ---------- 布局 ---------- */
+.wrap{max-width:1240px;margin:0 auto;padding:0 24px 80px}
+.hero{padding:52px 0 30px;text-align:center}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;letter-spacing:3px;color:var(--sub);
+  border:1px solid var(--border);border-radius:99px;padding:7px 16px;background:var(--card);margin-bottom:22px}
+.eyebrow .spark{width:6px;height:6px;border-radius:50%;background:var(--grad);animation:pulseGlow 2s infinite}
+h1{font-size:clamp(30px,4.6vw,50px);font-weight:900;letter-spacing:-1px;line-height:1.15}
+h1 .grad{background:var(--grad);background-clip:text;-webkit-background-clip:text;color:transparent}
+.hero-sub{margin-top:14px;color:var(--sub);font-size:14.5px;line-height:1.8}
+.hero-sub b{color:#c7cdf0;font-weight:600}
+
+/* ---------- KPI ---------- */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:36px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px 22px;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);position:relative;overflow:hidden;transition:.3s}
+.kpi:hover{transform:translateY(-3px);border-color:var(--border2);background:var(--card2)}
+.kpi::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.25),transparent)}
+.kpi .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;margin-bottom:14px;font-size:18px}
+.kpi .ic.i1{background:rgba(129,140,248,.16)}
+.kpi .ic.i2{background:rgba(192,132,252,.16)}
+.kpi .ic.i3{background:rgba(34,211,238,.14)}
+.kpi .ic.i4{background:rgba(52,211,153,.13)}
+.kpi .v{font-size:27px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.kpi .l{font-size:12.5px;color:var(--sub);margin-top:5px}
+
+/* ---------- 卡片通用 ---------- */
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);position:relative;overflow:hidden}
+.card::before{content:"";position:absolute;top:0;left:8%;right:8%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent)}
+.sec-head{display:flex;align-items:baseline;gap:12px;margin:46px 0 18px}
+.sec-head .t{font-size:19px;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center;gap:10px}
+.sec-head .t::before{content:"";width:4px;height:18px;border-radius:2px;background:var(--grad)}
+.sec-head .n{font-size:12.5px;color:var(--dim)}
+
+/* ---------- 领奖台 ---------- */
+.podium{display:grid;grid-template-columns:1fr 1.12fr 1fr;gap:16px;align-items:stretch}
+.p-card{padding:26px 24px 22px;border-radius:20px;position:relative;overflow:hidden;cursor:pointer;
+  background:var(--card);border:1px solid var(--border);backdrop-filter:blur(16px);transition:.3s;
+  display:flex;flex-direction:column;animation:fadeUp .7s cubic-bezier(.2,.7,.3,1) both}
+.p-card:hover{transform:translateY(-5px);border-color:var(--border2);background:var(--card2)}
+.p-card.p1{order:2;animation-delay:.08s}
+.p-card.p2{order:1;animation-delay:.16s}
+.p-card.p3{order:3;animation-delay:.24s}
+.p-card .halo{position:absolute;width:240px;height:240px;border-radius:50%;filter:blur(70px);opacity:.35;right:-70px;top:-70px;pointer-events:none}
+.p-rank{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-weight:900;font-size:17px;color:#1c1917;margin-bottom:16px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.p1 .p-rank{background:var(--gold)} .p2 .p-rank{background:var(--silver)} .p3 .p-rank{background:var(--bronze)}
+.p-id{display:flex;align-items:center;gap:13px;margin-bottom:16px}
+.p-name{font-size:18.5px;font-weight:800;letter-spacing:-.3px;line-height:1.25}
+.p-card.p1 .p-name{font-size:21px}
+.p-org{font-size:12px;color:var(--sub);margin-top:3px;display:flex;align-items:center;gap:6px}
+.p-org .chip{padding:1.5px 8px;border-radius:99px;font-size:11px}
+.p-tok{font-size:clamp(26px,3vw,34px);font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-1px;
+  background:var(--grad);background-clip:text;-webkit-background-clip:text;color:transparent}
+.p-meta{display:flex;gap:18px;margin-top:10px;font-size:12.5px;color:var(--sub)}
+.p-meta b{color:#dfe4f7;font-weight:700;font-variant-numeric:tabular-nums}
+.p-bar{height:5px;border-radius:99px;background:rgba(255,255,255,.08);margin-top:14px;overflow:hidden}
+.p-bar i{display:block;height:100%;border-radius:99px;background:var(--grad);width:0;transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
+.p-crown{position:absolute;top:18px;right:20px;font-size:20px;filter:drop-shadow(0 2px 8px rgba(245,158,11,.5));animation:crown 2.6s ease-in-out infinite}
+@keyframes crown{50%{transform:translateY(-4px) rotate(-6deg)}}
+
+/* ---------- 图表 ---------- */
+.charts{display:grid;grid-template-columns:1.25fr 1fr;gap:16px}
+.chart-card{padding:22px 24px}
+.chart-title{font-size:14.5px;font-weight:700;display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.chart-title span{font-size:11.5px;color:var(--dim);font-weight:400}
+.bars{display:flex;flex-direction:column;gap:11px}
+.bar-row{display:grid;grid-template-columns:26px 34px 1fr 84px;align-items:center;gap:10px;font-size:12.5px;cursor:pointer}
+.bar-row:hover .bar-name{color:#fff}
+.bar-rank{color:var(--dim);font-variant-numeric:tabular-nums;font-weight:600}
+.bar-name{color:#c3c9e4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:.2s;font-weight:600}
+.bar-track{height:14px;border-radius:7px;background:rgba(255,255,255,.06);overflow:hidden}
+.bar-fill{height:100%;width:0;border-radius:7px;position:relative;transition:width 1.2s cubic-bezier(.2,.7,.2,1)}
+.bar-fill::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);background-size:220% 100%;animation:shine 2.6s linear infinite}
+@keyframes shine{from{background-position:180% 0}to{background-position:-80% 0}}
+.bar-val{color:var(--sub);text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.donut-wrap{display:grid;place-items:center;position:relative}
+.donut-wrap canvas{width:230px;height:230px;cursor:pointer}
+.donut-center{position:absolute;text-align:center;pointer-events:none}
+.donut-center .dt{font-size:11.5px;color:var(--dim)}
+.donut-center .dv{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums}
+.donut-tip{position:absolute;pointer-events:none;background:rgba(10,14,28,.92);border:1px solid var(--border2);border-radius:10px;padding:8px 12px;font-size:12px;opacity:0;transition:opacity .15s;white-space:nowrap;z-index:5;transform:translate(-50%,-115%)}
+.donut-tip b{display:block;font-size:12.5px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:14px;justify-content:center}
+.legend .lg{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);cursor:pointer}
+.legend .lg:hover{color:#fff}
+.legend .sw{width:9px;height:9px;border-radius:3px}
+
+/* ---------- 工具栏 ---------- */
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.search{flex:1;min-width:220px;position:relative}
+.search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--dim)}
+.search input{width:100%;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);
+  color:var(--txt);padding:0 14px 0 37px;font-size:13.5px;outline:none;transition:.25s;font-family:inherit}
+.search input:focus{border-color:rgba(129,140,248,.55);background:var(--card2);box-shadow:0 0 0 3px rgba(129,140,248,.14)}
+.search input::placeholder{color:var(--dim)}
+select{height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--txt);
+  padding:0 30px 0 12px;font-size:13px;outline:none;cursor:pointer;appearance:none;font-family:inherit;transition:.25s;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2398a0ba' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center}
+select:hover{background-color:var(--card2)}
+select option{background:#0b0f1f;color:var(--txt)}
+.seg{display:flex;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:3px;gap:2px}
+.seg button{border:none;background:transparent;color:var(--sub);font-size:12.5px;padding:7px 14px;border-radius:9px;cursor:pointer;font-family:inherit;transition:.2s;white-space:nowrap}
+.seg button.on{background:linear-gradient(120deg,rgba(129,140,248,.32),rgba(192,132,252,.32));color:#fff;font-weight:700;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.count-pill{font-size:12px;color:var(--dim);margin-left:auto;white-space:nowrap}
+.count-pill b{color:#c7cdf0;font-variant-numeric:tabular-nums}
+
+/* ---------- 状态条 ---------- */
+.statusbar{display:flex;align-items:center;gap:9px;font-size:12.5px;border-radius:12px;padding:9px 14px;margin-bottom:14px;border:1px solid}
+.statusbar.ok{background:rgba(52,211,153,.07);border-color:rgba(52,211,153,.22);color:#a7f3d0}
+.statusbar.warn{background:rgba(251,191,36,.07);border-color:rgba(251,191,36,.25);color:#fde68a}
+.statusbar .retry{margin-left:auto;cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-size:12.5px;background:none;border:none;color:inherit;font-family:inherit}
+
+/* ---------- 表格 ---------- */
+.table-card{padding:6px 0 10px;overflow:visible}
+.tscroll{overflow-x:auto}
+@media (min-width:920px){.tscroll{overflow:visible}}
+@media (max-width:919px){.tscroll thead th{position:static}}
+.tscroll table{width:100%;border-collapse:separate;border-spacing:0;min-width:860px}
+.tscroll thead th{font-size:11.5px;color:var(--dim);font-weight:600;text-align:left;padding:13px 16px;border-bottom:1px solid var(--border);
+  white-space:nowrap;position:sticky;top:64px;background:rgba(6,9,20,.9);backdrop-filter:blur(10px);z-index:5;cursor:pointer;user-select:none}
+.tscroll thead th:hover{color:#c7cdf0}
+.tscroll thead th .arr{font-size:9px;margin-left:3px;opacity:.7}
+.tscroll tbody td{padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13.5px;vertical-align:middle}
+.tscroll tbody tr{cursor:pointer;transition:background .18s;animation:fadeUp .5s cubic-bezier(.2,.7,.3,1) both;animation-delay:calc(var(--i)*22ms)}
+.tscroll tbody tr:hover{background:rgba(129,140,248,.065)}
+.tscroll tbody tr:last-child td{border-bottom:none}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.rk{display:inline-grid;place-items:center;min-width:30px;height:30px;padding:0 6px;border-radius:10px;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;color:#c7cdf0}
+.rk.r1{background:var(--gold);color:#1c1917;box-shadow:0 3px 12px rgba(245,158,11,.4)}
+.rk.r2{background:var(--silver);color:#1c1917}
+.rk.r3{background:var(--bronze);color:#1c1917}
+.mcell{display:flex;align-items:center;gap:12px;min-width:230px}
+.avatar{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff;flex-shrink:0;letter-spacing:.5px;box-shadow:0 3px 10px rgba(0,0,0,.3)}
+.m-name{font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px}
+.m-sub{font-size:11px;color:var(--dim);margin-top:2px;display:flex;gap:6px;align-items:center;white-space:nowrap}
+.tag{padding:1px 7px;border-radius:99px;font-size:10.5px;border:1px solid}
+.tag.multi{color:#93c5fd;border-color:rgba(147,197,253,.35);background:rgba(147,197,253,.09)}
+.tag.free{color:#6ee7b7;border-color:rgba(110,231,183,.35);background:rgba(110,231,183,.09)}
+.tag.new{color:#fcd34d;border-color:rgba(252,211,77,.35);background:rgba(252,211,77,.09)}
+.num{font-variant-numeric:tabular-nums;font-weight:700;font-size:13.5px}
+.num.sub2{color:var(--sub);font-weight:600;font-size:12.5px}
+.share-cell{min-width:130px}
+.share-track{height:5px;border-radius:99px;background:rgba(255,255,255,.07);margin-top:6px;overflow:hidden;max-width:120px}
+.share-track i{display:block;height:100%;border-radius:99px;background:var(--grad);width:0;transition:width 1s cubic-bezier(.2,.7,.2,1)}
+.price{font-variant-numeric:tabular-nums;font-size:12.5px;color:#c3c9e4;white-space:nowrap}
+.price .io{color:var(--dim)}
+.more-btn{display:block;margin:18px auto 8px;padding:10px 30px;border-radius:99px;border:1px solid var(--border2);
+  background:var(--card);color:var(--txt);font-size:13px;cursor:pointer;font-family:inherit;transition:.25s}
+.more-btn:hover{background:var(--card2);transform:translateY(-1px)}
+.empty{padding:60px 20px;text-align:center;color:var(--dim);font-size:13.5px}
+
+/* ---------- 详情抽屉 ---------- */
+.drawer-mask{position:fixed;inset:0;background:rgba(2,4,10,.6);backdrop-filter:blur(4px);z-index:90;opacity:0;pointer-events:none;transition:.3s}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,94vw);z-index:95;background:rgba(9,12,26,.92);
+  backdrop-filter:blur(24px);border-left:1px solid var(--border2);transform:translateX(105%);transition:transform .38s cubic-bezier(.2,.8,.25,1);
+  overflow-y:auto;padding:26px 26px 40px}
+body.drawer-open .drawer-mask{opacity:1;pointer-events:auto}
+body.drawer-open .drawer{transform:none}
+.d-close{position:absolute;top:16px;right:16px}
+.d-head{display:flex;gap:14px;align-items:center;margin-bottom:6px}
+.d-head .avatar{width:52px;height:52px;border-radius:15px;font-size:16px}
+.d-title{font-size:19px;font-weight:800;letter-spacing:-.3px;line-height:1.3}
+.d-org{font-size:12.5px;color:var(--sub);margin-top:3px}
+.d-desc{font-size:12.5px;color:var(--sub);line-height:1.75;margin:14px 0 18px}
+.d-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.d-stat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:13px 15px}
+.d-stat .v{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.d-stat .l{font-size:11px;color:var(--dim);margin-top:3px}
+.d-sec{font-size:12.5px;font-weight:700;color:#c7cdf0;margin:18px 0 9px;display:flex;align-items:center;gap:8px}
+.d-sec::before{content:"";width:3px;height:13px;border-radius:2px;background:var(--grad)}
+.price-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.price-table td{padding:8px 4px;border-bottom:1px solid rgba(255,255,255,.06);color:var(--sub)}
+.price-table td:last-child{text-align:right;color:#e9edf8;font-weight:700;font-variant-numeric:tabular-nums}
+.d-chips{display:flex;flex-wrap:wrap;gap:7px}
+.d-chips .chip{padding:4px 11px;border-radius:99px;font-size:11.5px;background:var(--card);border:1px solid var(--border);color:#c3c9e4}
+.d-link{display:inline-flex;align-items:center;gap:6px;margin-top:20px;font-size:13px;color:#a5b4fc;text-decoration:none;border:1px solid rgba(165,180,252,.3);padding:9px 18px;border-radius:12px;transition:.25s}
+.d-link:hover{background:rgba(129,140,248,.12);transform:translateY(-1px)}
+.vbar{display:grid;grid-template-columns:64px 1fr 70px;gap:10px;align-items:center;font-size:12px;color:var(--sub);margin-bottom:8px}
+.vbar .tr{height:6px;background:rgba(255,255,255,.07);border-radius:99px;overflow:hidden}
+.vbar .tr i{display:block;height:100%;background:var(--grad);border-radius:99px}
+.vbar .vv{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---------- toast / footer ---------- */
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,80px);z-index:120;background:rgba(12,16,32,.94);
+  border:1px solid var(--border2);border-radius:14px;padding:12px 20px;font-size:13px;display:flex;gap:10px;align-items:center;
+  opacity:0;transition:.35s cubic-bezier(.2,.8,.25,1);box-shadow:0 12px 40px rgba(0,0,0,.5);max-width:90vw}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast .td{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+footer{border-top:1px solid rgba(255,255,255,.07);margin-top:70px;padding:34px 24px 44px;text-align:center;color:var(--dim);font-size:12.5px;line-height:2}
+footer a{color:#8b95b8;text-decoration:none;border-bottom:1px dotted rgba(139,149,184,.4)}
+footer a:hover{color:#c7cdf0}
+.skeleton{position:relative;overflow:hidden;background:rgba(255,255,255,.05)!important;border-radius:8px;color:transparent!important}
+.skeleton::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);background-size:200% 100%;animation:sk 1.4s infinite}
+@keyframes sk{from{background-position:180% 0}to{background-position:-80% 0}}
+
+/* ---------- 响应式 ---------- */
+@media (max-width:1000px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .charts{grid-template-columns:1fr}
+  .podium{grid-template-columns:1fr}
+  .p-card.p1{order:1}.p-card.p2{order:2}.p-card.p3{order:3}
+}
+@media (max-width:640px){
+  .topbar-in{padding:0 16px;gap:8px}
+  .live .countdown,.live b span{display:none}
+  .wrap{padding:0 16px 60px}
+  .hero{padding:36px 0 22px}
+  h1{font-size:28px}
+  .count-pill{margin-left:0;width:100%;text-align:left}
+  .m-name{max-width:150px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}
+}
+</style>
+</head>
+<body>
+
+<div class="bg"><div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div></div>
+<div class="noise"></div>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="logo"><div class="logo-mark">⚡</div>全球大模型热度榜</div>
+    <div class="spacer"></div>
+    <div class="live" id="liveBadge"><span class="dot"></span><b>加载中</b><span class="countdown" id="countdown"></span></div>
+    <button class="icon-btn" id="refreshBtn" title="立即刷新" aria-label="刷新数据">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section class="hero">
+    <div class="eyebrow"><span class="spark"></span>LIVE · REAL-TIME LLM RANKINGS</div>
+    <h1>全球主流大模型<span class="grad">实时热度榜</span></h1>
+    <p class="hero-sub">基于 <b>OpenRouter</b> 平台全球开发者真实调用数据（Tokens 用量 + 请求数）实时排名<br>
+      覆盖 <b id="heroModels">—</b> 个模型 · <b id="heroOrgs">—</b> 家机构 · 数据日期 <b id="heroDate">—</b></p>
+
+    <div class="kpis">
+      <div class="kpi"><div class="ic i1">🧠</div><div class="v" id="kModels">0</div><div class="l">上榜模型数</div></div>
+      <div class="kpi"><div class="ic i2">🔥</div><div class="v" id="kTokens">0</div><div class="l">24h Tokens 总用量</div></div>
+      <div class="kpi"><div class="ic i3">📡</div><div class="v" id="kReqs">0</div><div class="l">24h API 调用次数</div></div>
+      <div class="kpi"><div class="ic i4">🏢</div><div class="v" id="kOrgs">0</div><div class="l">参与机构 / 实验室</div></div>
+    </div>
+  </section>
+
+  <div class="sec-head"><div class="t">热度三甲</div><div class="n">按 24h Tokens 用量 · 点击查看详情</div></div>
+  <section class="podium" id="podium"></section>
+
+  <div class="sec-head"><div class="t">市场格局</div><div class="n">当前筛选范围内统计</div></div>
+  <section class="charts">
+    <div class="card chart-card">
+      <div class="chart-title">Token 用量 Top 10 <span>条长相对第一名</span></div>
+      <div class="bars" id="bars"></div>
+    </div>
+    <div class="card chart-card">
+      <div class="chart-title">机构用量份额 <span>悬停查看明细</span></div>
+      <div class="donut-wrap">
+        <canvas id="donut" width="460" height="460"></canvas>
+        <div class="donut-center"><div class="dt" id="dLabel">总用量</div><div class="dv" id="dValue">—</div></div>
+        <div class="donut-tip" id="dTip"></div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </section>
+
+  <div class="sec-head"><div class="t">完整榜单</div><div class="n" id="boardNote">按 24h Tokens 用量排序</div></div>
+  <section>
+    <div class="toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="text" placeholder="搜索模型 / 机构，如 Gemini、Claude、GLM…">
+      </div>
+      <div class="seg" id="segKind">
+        <button data-k="llm" class="on">大语言模型</button>
+        <button data-k="multi">多模态</button>
+        <button data-k="all">全部</button>
+      </div>
+      <select id="orgSel" title="按机构筛选"></select>
+      <select id="sortSel" title="排序方式">
+        <option value="tok">热度 · Tokens</option>
+        <option value="req">调用量 · Requests</option>
+        <option value="ctx">上下文窗口</option>
+        <option value="price">价格 · 最低优先</option>
+        <option value="new">最新发布</option>
+      </select>
+      <div class="count-pill">共 <b id="cnt">0</b> 个结果</div>
+    </div>
+    <div class="statusbar ok" id="statusbar" style="display:none"></div>
+    <div class="card table-card">
+      <div class="tscroll">
+        <table>
+          <thead><tr>
+            <th style="width:64px">#</th>
+            <th>模型</th>
+            <th data-s="tok" style="text-align:right">24h Tokens <span class="arr">▾</span></th>
+            <th>用量占比</th>
+            <th data-s="req" style="text-align:right">调用量 <span class="arr">▾</span></th>
+            <th data-s="ctx" style="text-align:right">上下文 <span class="arr">▾</span></th>
+            <th data-s="price">价格 / 1M Tokens <span class="arr">▾</span></th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <button class="more-btn" id="moreBtn" style="display:none">展开更多 ↓</button>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  数据来源：<a href="https://openrouter.ai/rankings" target="_blank" rel="noopener">OpenRouter 公开用量排行接口</a>（前端直连，无需密钥）· 页面每 5 分钟自动刷新，离线时自动回退到内置快照<br>
+  排行反映 OpenRouter 平台生态内的相对调用量，仅供研究与参考，不等同于全行业市场份额 · 生成于 2026 · 用 ❤ 与原生 JS 打造
+</footer>
+
+<div class="drawer-mask" id="dMask"></div>
+<aside class="drawer" id="drawer">
+  <button class="icon-btn d-close" id="dClose" aria-label="关闭">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+  </button>
+  <div id="dBody"></div>
+</aside>
+
+<div class="toast" id="toast"><span class="td"></span><span id="toastMsg"></span></div>
+
+<script>
+/* ================= 配置与工具 ================= */
+"use strict";
+const REFRESH_MS = 5 * 60 * 1000;
+const $ = s => document.querySelector(s);
+
+const ORGS = {
+  "openai":{n:"OpenAI",c:"#10a37f"}, "anthropic":{n:"Anthropic",c:"#d97757"},
+  "google":{n:"Google",c:"#4285f4"}, "meta":{n:"Meta",c:"#0866ff",g:"meta"},
+  "meta-llama":{n:"Meta",c:"#0866ff",g:"meta"}, "mistralai":{n:"Mistral AI",c:"#fa520f"},
+  "deepseek":{n:"深度求索",c:"#4d6bfe"}, "qwen":{n:"阿里通义",c:"#615ced",g:"ali"},
+  "alibaba":{n:"阿里通义",c:"#615ced",g:"ali"}, "moonshotai":{n:"月之暗面",c:"#16b0a1"},
+  "z-ai":{n:"智谱 AI",c:"#8b5cf6"}, "minimax":{n:"MiniMax",c:"#ff5c5c"},
+  "tencent":{n:"腾讯混元",c:"#00c2de"}, "bytedance":{n:"字节跳动",c:"#3c8cff",g:"bd"},
+  "bytedance-seed":{n:"字节跳动",c:"#3c8cff",g:"bd"}, "nvidia":{n:"NVIDIA",c:"#76b900"},
+  "microsoft":{n:"Microsoft",c:"#00a4ef"}, "cohere":{n:"Cohere",c:"#5b8a80"},
+  "x-ai":{n:"xAI",c:"#cbd5e1"}, "xai":{n:"xAI",c:"#cbd5e1"},
+  "perplexity":{n:"Perplexity",c:"#20808d"}, "amazon":{n:"Amazon",c:"#ff9900"},
+  "ai21":{n:"AI21",c:"#e0683c"}, "inclusionai":{n:"蚂蚁集团",c:"#1677ff"},
+  "thinkingmachines":{n:"Thinking Machines",c:"#a78bfa"}, "liquid":{n:"Liquid AI",c:"#0ea5e9"},
+  "baai":{n:"智源研究院",c:"#f59e0b"}, "ibm-granite":{n:"IBM",c:"#4d8ef7"},
+  "stepfun":{n:"阶跃星辰",c:"#0057ff"}, "baidu":{n:"百度",c:"#2932e1"},
+  "nousresearch":{n:"Nous Research",c:"#8b5cf6"}, "poolside":{n:"Poolside",c:"#22d3ee"},
+  "aion-labs":{n:"Aion Labs",c:"#94a3b8"}, "kwaivgi":{n:"快手可灵",c:"#ff5000"},
+  "deepgram":{n:"Deepgram",c:"#13ef93"}, "black-forest-labs":{n:"BFL",c:"#d946ef"},
+  "recraft":{n:"Recraft",c:"#f43f5e"}, "voyageai":{n:"Voyage AI",c:"#6366f1"},
+  "fish-audio":{n:"Fish Audio",c:"#fb923c"}, "thedrummer":{n:"TheDrummer",c:"#f87171"},
+  "sao10k":{n:"Sao10K",c:"#fbbf24"}, "sourceful":{n:"Sourceful",c:"#34d399"},
+  "intfloat":{n:"intfloat",c:"#60a5fa"}, "sentence-transformers":{n:"ST",c:"#94a3b8"},
+  "runway":{n:"Runway",c:"#e5e7eb"}, "heygen":{n:"HeyGen",c:"#8b5cf6"},
+  "xiaomi":{n:"小米",c:"#ff6900"}, "bfl":{n:"BFL",c:"#d946ef"}
+};
+const PALETTE = ["#60a5fa","#f472b6","#34d399","#fbbf24","#a78bfa","#22d3ee","#fb923c","#f87171","#4ade80"];
+const NONLLM_RE = /image|img|video|veo|sora|flux|kling|seedance|hailuo|wan[-_0-9]|avatar|chirp|whisper|tts|asr|stt|transcri|voice|speech|audio|music|embed|rerank|draw|photo|upscale|ltx|wanx|midjourney|ideogram/i;
+const ACR = new Set(["gpt","glm","ai","llm","asr","tts","stt","vl","mo","ocr","k2","tts","ds","v3","o1","o3","o4","ugc"]);
+
+/* ---------- 格式化 ---------- */
+function fmtCN(x, unit){
+  if (x == null || isNaN(x)) return "—";
+  if (x >= 1e12) return (x/1e12).toFixed(x < 1e13 ? 2 : 1) + " 万亿";
+  if (x >= 1e8)  return (x/1e8).toFixed(x < 1e9 ? 2 : 1) + " 亿";
+  if (x >= 1e4)  return (x/1e4).toFixed(1) + " 万";
+  return String(Math.round(x));
+}
+function fmtCtx(n){
+  if (!n) return "—";
+  if (n >= 1e6) return (n/1e6).toFixed(n%1e6?1:0) + "M";
+  if (n >= 1e3) return Math.round(n/1e3) + "K";
+  return String(n);
+}
+function fmtPrice(p){ // 每 token → 每 1M
+  if (p == null) return null;
+  const v = p * 1e6;
+  if (v === 0) return "免费";
+  return "$" + (v < 1 ? v.toFixed(2) : v.toFixed(1));
+}
+function fmtDate(ts){
+  if (!ts) return "—";
+  const d = new Date(ts * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function fmtCNDate(s){
+  if (!s) return "—";
+  const [y,m,d] = s.split("-");
+  return `${y} 年 ${+m} 月 ${+d} 日`;
+}
+function nowStr(){ return new Date().toLocaleTimeString("zh-CN",{hour12:false}); }
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function countUp(el, target, fmt){
+  const from = +(el.dataset.v || 0); el.dataset.v = target;
+  const t0 = performance.now(), dur = 900;
+  function tick(t){
+    const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = fmt(from + (target - from) * e);
+    if (k < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ---------- 状态 ---------- */
+const state = {
+  date:"", fetchedAt:"", live:false,
+  models:[],          // 全量模型（已聚合）
+  view:[],            // 当前筛选结果
+  seg:"llm", org:"all", sort:"tok", q:"",
+  shown:60, timer:null, nextAt:0, refreshing:false
+};
+
+/* ---------- 元数据索引 ---------- */
+function normBase(id){ return id.replace(/^~/,"").replace(/:\w+$/,"").replace(/-latest$/,""); }
+function baseKey(id){ return normBase(id).replace(/-\d{4,8}$/,""); }
+let META_EXACT = new Map(), META_KEY = new Map();
+function buildMetaIndex(){
+  META_EXACT.clear(); META_KEY.clear();
+  const snap = window.SNAPSHOT || { meta:{} };
+  for (const [id, arr] of Object.entries(snap.meta || {})){
+    META_EXACT.set(id, arr);
+    const k = baseKey(id), cur = META_KEY.get(k);
+    if (!cur || (arr[6]||0) > (cur[6]||0)) META_KEY.set(k, arr);
+  }
+}
+function metaFor(slug){
+  if (META_EXACT.has(slug)) return META_EXACT.get(slug);
+  const k = slug.replace(/-\d{8}$/,"");
+  if (META_EXACT.has(k)) return META_EXACT.get(k);
+  return META_KEY.get(baseKey(slug)) || META_KEY.get(k) || null;
+}
+
+/* ---------- 机构 ---------- */
+function orgOf(slug){
+  const i = slug.indexOf("/");
+  const key = i > 0 ? slug.slice(0, i) : "other";
+  const o = ORGS[key];
+  if (o) return { key, name:o.n, color:o.c, group:o.g || key };
+  let h = 0; for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const nm = key === "other" ? "其他" : key.replace(/[-_]/g," ").replace(/\b\w/g, c => c.toUpperCase());
+  return { key, name:nm, color:PALETTE[h % PALETTE.length], group:key };
+}
+function prettyName(slug, meta){
+  if (meta && meta[0]){
+    const ci = meta[0].indexOf(": ");
+    if (ci > 0) return meta[0].slice(ci + 2);
+    return meta[0];
+  }
+  const tail = slug.includes("/") ? slug.split("/").slice(1).join("/") : slug;
+  return tail.replace(/[-_]/g," ").split(" ").map(w =>
+    ACR.has(w.toLowerCase()) ? w.toUpperCase() : (/^\d/.test(w) ? w : w.replace(/^./, c => c.toUpperCase()))
+  ).join(" ").replace(/\b\w+/g, m => /^\d/.test(m) ? m : m); // keep
+}
+
+/* ---------- 构建模型列表 ---------- */
+function buildModels(){
+  const snap = window.SNAPSHOT || { rankings:[] };
+  state.date = snap.date || "";
+  state.fetchedAt = snap.fetchedAt || "";
+  state.models = (snap.rankings || []).map(([slug, tok, req, vars]) => {
+    const meta = metaFor(slug);
+    const base = meta ? Object.keys(snap.meta || {}).find(k => snap.meta[k] === meta) || normBase(slug) : normBase(slug);
+    const org = orgOf(slug);
+    const idc = (base + " " + slug);
+    const hasMeta = !!meta;
+    const outText = hasMeta ? (meta[5]||"").split(",").includes("text") : true;
+    const isLLM = outText && !NONLLM_RE.test(idc);
+    const inMods = hasMeta ? (meta[4]||"").split(",") : ["text"];
+    const multi = isLLM && inMods.some(m => m && m !== "text");
+    const isNew = hasMeta && meta[6] && (Date.now()/1000 - meta[6]) < 60*86400;
+    return {
+      slug, base: hasMeta ? base : slug.replace(/-\d{8}$/,""), tok, req, vars: vars||[],
+      org, name: prettyName(slug, meta), hasMeta, isLLM, multi,
+      ctx: hasMeta ? meta[1] : 0,
+      pp: hasMeta ? meta[2] : null, cp: hasMeta ? meta[3] : null,
+      created: hasMeta ? meta[6] : 0, desc: hasMeta ? meta[7] : "",
+      isNew: !!isNew
+    };
+  });
+}
+
+/* ---------- 筛选与排序 ---------- */
+function currentSet(){
+  let list = state.models;
+  if (state.seg === "llm")  list = list.filter(m => m.isLLM);
+  if (state.seg === "multi") list = list.filter(m => m.isLLM && m.multi);
+  if (state.org !== "all") list = list.filter(m => m.org.group === state.org);
+  return list;
+}
+function applyFilters(){
+  const q = state.q.trim().toLowerCase();
+  let list = currentSet();
+  if (q) list = list.filter(m =>
+    m.name.toLowerCase().includes(q) || m.slug.toLowerCase().includes(q) || m.org.name.toLowerCase().includes(q));
+  const byPrice = m => (m.pp == null || m.cp == null) ? Infinity : (m.pp + m.cp) / 2;
+  const sorters = {
+    tok:   (a,b) => b.tok - a.tok,
+    req:   (a,b) => b.req - a.req,
+    ctx:   (a,b) => (b.ctx||0) - (a.ctx||0),
+    price: (a,b) => byPrice(a) - byPrice(b),
+    new:   (a,b) => (b.created||0) - (a.created||0)
+  };
+  list = [...list].sort(sorters[state.sort] || sorters.tok);
+  state.view = list;
+}
+
+/* ---------- 渲染：KPI / 英雄区 ---------- */
+function renderKPIs(){
+  const set = currentSet();
+  const totalTok = set.reduce((s,m) => s + m.tok, 0);
+  const totalReq = set.reduce((s,m) => s + m.req, 0);
+  const orgs = new Set(set.map(m => m.org.group));
+  countUp($("#kModels"), set.length, v => Math.round(v).toLocaleString());
+  countUp($("#kTokens"), totalTok, v => fmtCN(v));
+  countUp($("#kReqs"), totalReq, v => fmtCN(v));
+  countUp($("#kOrgs"), orgs.size, v => Math.round(v).toLocaleString());
+  $("#heroModels").textContent = state.models.filter(m=>m.isLLM).length;
+  $("#heroOrgs").textContent = new Set(state.models.filter(m=>m.isLLM).map(m=>m.org.group)).size;
+  $("#heroDate").textContent = fmtCNDate(state.date);
+}
+
+/* ---------- 渲染：领奖台 ---------- */
+function renderPodium(){
+  const top = [...currentSet()].sort((a,b) => b.tok - a.tok).slice(0,3);
+  const total = currentSet().reduce((s,m)=>s+m.tok,0) || 1;
+  const pod = $("#podium");
+  pod.innerHTML = "";
+  const medals = { 0:["p1","🏆"], 1:["p2","🥈"], 2:["p3","🥉"] };
+  top.forEach((m, i) => {
+    const [cls, icon] = medals[i];
+    const el = document.createElement("div");
+    el.className = "p-card " + cls;
+    el.innerHTML = `
+      <div class="halo" style="background:${m.org.color}"></div>
+      ${i===0 ? '<div class="p-crown">👑</div>' : ""}
+      <div class="p-rank">${i+1}</div>
+      <div class="p-id">
+        <div class="avatar" style="background:linear-gradient(135deg,${m.org.color},${shade(m.org.color,-32)})">${mono(m.name)}</div>
+        <div>
+          <div class="p-name">${esc(m.name)}</div>
+          <div class="p-org"><span class="chip" style="background:${m.org.color}22;color:${light(m.org.color)};border:1px solid ${m.org.color}55">${esc(m.org.name)}</span></div>
+        </div>
+      </div>
+      <div class="p-tok">${fmtCN(m.tok)} <span style="font-size:13px;font-weight:600;letter-spacing:0">Tokens/24h</span></div>
+      <div class="p-meta"><span>调用 <b>${fmtCN(m.req)}</b> 次</span><span>上下文 <b>${fmtCtx(m.ctx)}</b></span><span>份额 <b>${(m.tok/total*100).toFixed(1)}%</b></span></div>
+      <div class="p-bar"><i data-w="${(m.tok/top[0].tok*100).toFixed(1)}"></i></div>`;
+    el.addEventListener("click", () => openDrawer(m));
+    pod.appendChild(el);
+  });
+  requestAnimationFrame(() => requestAnimationFrame(() =>
+    pod.querySelectorAll(".p-bar i").forEach(b => b.style.width = b.dataset.w + "%")));
+}
+
+/* ---------- 渲染：条形图 ---------- */
+function renderBars(){
+  const set = [...currentSet()].sort((a,b) => b.tok - a.tok).slice(0,10);
+  const top = set[0] ? set[0].tok : 1;
+  const box = $("#bars");
+  box.innerHTML = set.map((m,i) => `
+    <div class="bar-row" data-slug="${esc(m.slug)}">
+      <span class="bar-rank">${String(i+1).padStart(2,"0")}</span>
+      <div class="avatar" style="width:26px;height:26px;border-radius:8px;font-size:10px;background:linear-gradient(135deg,${m.org.color},${shade(m.org.color,-32)})">${mono(m.name)}</div>
+      <div class="bar-track"><div class="bar-fill" data-w="${(m.tok/top*100).toFixed(1)}" style="background:linear-gradient(90deg,${m.org.color}88,${m.org.color})"></div></div>
+      <span class="bar-val">${fmtCN(m.tok)}</span>
+    </div>`).join("");
+  box.querySelectorAll(".bar-row").forEach(r => r.addEventListener("click", () => {
+    const m = state.models.find(x => x.slug === r.dataset.slug); if (m) openDrawer(m);
+  }));
+  requestAnimationFrame(() => requestAnimationFrame(() =>
+    box.querySelectorAll(".bar-fill").forEach(b => b.style.width = b.dataset.w + "%")));
+}
+
+/* ---------- 渲染：环形图 ---------- */
+let donutSegs = [], donutData = [];
+function renderDonut(){
+  const set = currentSet();
+  const byOrg = new Map();
+  for (const m of set){
+    const g = byOrg.get(m.org.group) || { name:m.org.name, color:m.org.color, tok:0, req:0 };
+    g.tok += m.tok; g.req += m.req;
+    byOrg.set(m.org.group, g);
+  }
+  let arr = [...byOrg.values()].sort((a,b) => b.tok - a.tok);
+  const total = arr.reduce((s,x) => s + x.tok, 0) || 1;
+  if (arr.length > 8){
+    const rest = arr.slice(8), rt = rest.reduce((s,x)=>s+x.tok,0);
+    arr = arr.slice(0,8).concat([{ name:"其他", color:"#475569", tok:rt, req:rest.reduce((s,x)=>s+x.req,0) }]);
+  }
+  donutData = arr;
+  const cv = $("#donut"), ctx = cv.getContext("2d");
+  const W = cv.width, cx = W/2, cy = W/2, R = W/2 - 14, r = R * 0.62;
+  const t0 = performance.now(), dur = 1100;
+  function draw(k){
+    k = Math.max(0, Math.min(1, k));
+    ctx.clearRect(0,0,W,W);
+    donutSegs = [];
+    let a = -Math.PI/2;
+    for (const g of arr){
+      const span = g.tok/total * Math.PI*2 * k;
+      ctx.beginPath();
+      ctx.arc(cx,cy,R,a+0.012,a+span-0.012);
+      ctx.arc(cx,cy,r,a+span-0.012,a+0.012,true);
+      ctx.closePath();
+      ctx.fillStyle = g.color; ctx.globalAlpha = .92; ctx.fill();
+      ctx.globalAlpha = 1;
+      donutSegs.push({ a0:a, a1:a+span, g });
+      a += span;
+    }
+    if (k < 1) requestAnimationFrame(t2 => draw((t2-t0)/dur));
+  }
+  requestAnimationFrame(() => draw(0));
+  $("#dValue").textContent = fmtCN(total);
+  $("#dLabel").textContent = "24h Tokens";
+  $("#legend").innerHTML = arr.map(g => `
+    <span class="lg" data-g="${esc(g.name)}"><span class="sw" style="background:${g.color}"></span>${esc(g.name)} · ${(g.tok/total*100).toFixed(1)}%</span>`).join("");
+}
+$("#donut").addEventListener("mousemove", e => {
+  const cv = $("#donut"), rect = cv.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width * cv.width - cv.width/2;
+  const y = (e.clientY - rect.top) / rect.height * cv.height - cv.height/2;
+  const dist = Math.hypot(x,y), R = cv.width/2 - 14, r = R * 0.62;
+  const tip = $("#dTip");
+  if (dist < r || dist > R){ tip.style.opacity = 0; $("#dValue").textContent = fmtCN(donutData.reduce((s,g)=>s+g.tok,0)); $("#dLabel").textContent="24h Tokens"; return; }
+  let ang = Math.atan2(y,x) + Math.PI/2; if (ang < 0) ang += Math.PI*2;
+  const seg = donutSegs.find(s => ang >= s.a0 && ang <= s.a1);
+  if (!seg){ tip.style.opacity = 0; return; }
+  const total = donutData.reduce((s,g)=>s+g.tok,0) || 1;
+  tip.innerHTML = `<b style="color:${seg.g.color}">${esc(seg.g.name)}</b>${fmtCN(seg.g.tok)} tokens · ${fmtCN(seg.g.req)} 次调用 · ${(seg.g.tok/total*100).toFixed(1)}%`;
+  tip.style.left = (e.clientX - rect.left) + "px";
+  tip.style.top = (e.clientY - rect.top) + "px";
+  tip.style.opacity = 1;
+  $("#dValue").textContent = (seg.g.tok/total*100).toFixed(1) + "%";
+  $("#dLabel").textContent = seg.g.name;
+});
+$("#donut").addEventListener("mouseleave", () => { $("#dTip").style.opacity = 0; });
+
+/* ---------- 渲染：表格 ---------- */
+function renderTable(){
+  const list = state.view, top = list[0] ? list[0].tok : 1;
+  const tbody = $("#tbody");
+  const rows = list.slice(0, state.shown);
+  if (!rows.length){ tbody.innerHTML = `<tr><td colspan="7"><div class="empty">没有匹配的模型，换个筛选条件试试 🔍</div></td></tr>`; $("#moreBtn").style.display="none"; }
+  else tbody.innerHTML = rows.map((m,i) => {
+    const rankCls = i < 3 ? ` r${i+1}` : "";
+    const share = (m.tok/top*100);
+    const pct = state.sort === "tok" ? share : null;
+    const priceCell = m.pp == null ? `<span class="price" style="color:var(--dim)">—</span>` :
+      `<span class="price"><span class="io">入</span> ${fmtPrice(m.pp)} · <span class="io">出</span> ${fmtPrice(m.cp)}</span>`;
+    return `<tr data-slug="${esc(m.slug)}" style="--i:${Math.min(i,18)}">
+      <td><span class="rk${rankCls}">${i+1}</span></td>
+      <td><div class="mcell">
+        <div class="avatar" style="background:linear-gradient(135deg,${m.org.color},${shade(m.org.color,-32)})">${mono(m.name)}</div>
+        <div>
+          <div class="m-name" title="${esc(m.name)}">${esc(m.name)}</div>
+          <div class="m-sub"><span>${esc(m.org.name)}</span>${m.multi ? '<span class="tag multi">多模态</span>' : ""}${m.isLLM && m.vars.some(v=>v[0]==="free") ? '<span class="tag free">有免费版</span>' : ""}${m.isNew ? '<span class="tag new">新</span>' : ""}</div>
+        </div>
+      </div></td>
+      <td class="num" style="text-align:right">${fmtCN(m.tok)}</td>
+      <td class="share-cell">${pct != null ? `<span class="num sub2">${(m.tok/currentTotal()*100).toFixed(2)}%</span><div class="share-track"><i data-w="${share.toFixed(1)}"></i></div>` : `<span class="num sub2" style="color:var(--dim)">—</span>`}</td>
+      <td class="num" style="text-align:right;color:#c3c9e4">${fmtCN(m.req)}</td>
+      <td class="num" style="text-align:right;color:#c3c9e4">${fmtCtx(m.ctx)}</td>
+      <td>${priceCell}</td>
+    </tr>`;
+  }).join("");
+  tbody.querySelectorAll("tr[data-slug]").forEach(tr => tr.addEventListener("click", () => {
+    const m = state.models.find(x => x.slug === tr.dataset.slug); if (m) openDrawer(m);
+  }));
+  requestAnimationFrame(() => requestAnimationFrame(() =>
+    tbody.querySelectorAll(".share-track i").forEach(b => b.style.width = b.dataset.w + "%")));
+  $("#cnt").textContent = list.length;
+  $("#moreBtn").style.display = list.length > state.shown ? "block" : "none";
+}
+function currentTotal(){ return currentSet().reduce((s,m)=>s+m.tok,0) || 1; }
+
+/* ---------- 详情抽屉 ---------- */
+function openDrawer(m){
+  const total = currentTotal();
+  const varsHtml = m.vars.length ? m.vars.sort((a,b)=>b[1]-a[1]).map(([v,t,r]) => `
+    <div class="vbar"><span>${v === "standard" ? "标准" : v === "free" ? "免费" : v === "batch" ? "批量" : esc(v)}</span>
+      <div class="tr"><i style="width:${(t/m.tok*100).toFixed(1)}%"></i></div>
+      <span class="vv">${fmtCN(t)}</span></div>`).join("") : `<span style="color:var(--dim);font-size:12px">暂无分项数据</span>`;
+  $("#dBody").innerHTML = `
+    <div class="d-head">
+      <div class="avatar" style="background:linear-gradient(135deg,${m.org.color},${shade(m.org.color,-32)})">${mono(m.name)}</div>
+      <div><div class="d-title">${esc(m.name)}</div>
+      <div class="d-org">${esc(m.org.name)} · <span style="font-family:ui-monospace,Consolas,monospace;font-size:11px">${esc(m.slug)}</span></div></div>
+    </div>
+    ${m.desc ? `<div class="d-desc">${esc(m.desc)}</div>` : ""}
+    <div class="d-grid">
+      <div class="d-stat"><div class="v">${fmtCN(m.tok)}</div><div class="l">24h Tokens 用量</div></div>
+      <div class="d-stat"><div class="v">${fmtCN(m.req)}</div><div class="l">24h 调用次数</div></div>
+      <div class="d-stat"><div class="v">${fmtCtx(m.ctx)}</div><div class="l">上下文窗口</div></div>
+      <div class="d-stat"><div class="v">${(m.tok/total*100).toFixed(2)}%</div><div class="l">当前范围用量份额</div></div>
+    </div>
+    <div class="d-sec">价格（每 100 万 Tokens）</div>
+    <table class="price-table">
+      <tr><td>输入</td><td>${m.pp == null ? "未知" : "$" + (m.pp*1e6).toFixed(m.pp*1e6<1?3:2)}</td></tr>
+      <tr><td>输出</td><td>${m.cp == null ? "未知" : "$" + (m.cp*1e6).toFixed(m.cp*1e6<1?3:2)}</td></tr>
+      <tr><td>混合均价</td><td>${(m.pp == null || m.cp == null) ? "未知" : "$" + ((m.pp+m.cp)/2*1e6).toFixed(3)}</td></tr>
+    </table>
+    <div class="d-sec">变体用量分布</div>
+    ${varsHtml}
+    <div class="d-sec">能力标签</div>
+    <div class="d-chips">
+      <span class="chip">${m.isLLM ? "文本生成" : "其他 AI 能力"}</span>
+      ${m.multi ? '<span class="chip">多模态输入</span>' : ""}
+      ${m.vars.some(v=>v[0]==="free") ? '<span class="chip">提供免费额度</span>' : ""}
+      ${m.created ? `<span class="chip">发布于 ${fmtDate(m.created)}</span>` : ""}
+    </div>
+    <a class="d-link" href="https://openrouter.ai/${esc(m.base)}" target="_blank" rel="noopener">在 OpenRouter 查看详情 ↗</a>`;
+  document.body.classList.add("drawer-open");
+}
+function closeDrawer(){ document.body.classList.remove("drawer-open"); }
+$("#dMask").addEventListener("click", closeDrawer);
+$("#dClose").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
+/* ---------- 颜色工具 ---------- */
+function shade(hex, amt){
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, Math.max(0, (n >> 16) + amt));
+  const g = Math.min(255, Math.max(0, ((n >> 8) & 255) + amt));
+  const b = Math.min(255, Math.max(0, (n & 255) + amt));
+  return "#" + ((r << 16) | (g << 8) | b).toString(16).padStart(6, "0");
+}
+function light(hex){ return shade(hex, 70); }
+function mono(name){
+  const words = name.replace(/[^\w\s\u4e00-\u9fff]/g,"").trim().split(/\s+/);
+  const w = words.find(x => /[a-zA-Z]/.test(x)) || words[0] || "AI";
+  return w.slice(0,2).toUpperCase();
+}
+
+/* ---------- toast / 状态条 ---------- */
+let toastTimer;
+function toast(msg, type){
+  const t = $("#toast");
+  t.querySelector(".td").style.background = type === "err" ? "var(--err)" : type === "warn" ? "var(--warn)" : "var(--ok)";
+  $("#toastMsg").textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 4000);
+}
+function setStatus(kind, html){
+  const bar = $("#statusbar");
+  if (!kind){ bar.style.display = "none"; return; }
+  bar.style.display = "flex";
+  bar.className = "statusbar " + kind;
+  bar.innerHTML = html;
+}
+
+/* ---------- 实时数据 ---------- */
+async function fetchJSON(url, ms = 14000){
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try{
+    const r = await fetch(url, { signal: ctl.signal, cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+function mergeLive(rankRaw, metaRaw){
+  // 把实时返回转换为与快照相同的结构
+  const rows = rankRaw.data || [];
+  const latest = {};
+  for (const r of rows){
+    const s = r.model_permaslug, d = r.date;
+    if (!latest[s] || d > latest[s]) latest[s] = d;
+  }
+  const agg = {};
+  for (const r of rows){
+    if (r.date !== latest[r.model_permaslug]) continue;
+    const s = r.model_permaslug;
+    const a = agg[s] || (agg[s] = { tok:0, req:0, var:{} });
+    const tok = (r.total_prompt_tokens||0) + (r.total_completion_tokens||0);
+    a.tok += tok; a.req += r.count||0;
+    const v = r.variant||"standard";
+    const vv = a.var[v] || (a.var[v] = [0,0]); vv[0]+=tok; vv[1]+=r.count||0;
+  }
+  const rankings = Object.entries(agg)
+    .map(([s,a]) => [s, a.tok, a.req, Object.entries(a.var).map(([v,[t,r]]) => [v,t,r])])
+    .sort((x,y) => y[1]-x[1]);
+  const meta = {};
+  if (metaRaw && Array.isArray(metaRaw.data)){
+    for (const m of metaRaw.data){
+      const b = normBase(m.id);
+      const cur = meta[b];
+      if (!cur || (m.created||0) > (cur[6]||0)){
+        const arch = m.architecture||{}, pr = m.pricing||{};
+        const desc = String(m.description||"").replace(/<[^>]+>|\s+/g, " ").trim().slice(0, 300);
+        meta[b] = [ m.name||b, m.context_length||0, +(pr.prompt||0), +(pr.completion||0),
+          (arch.input_modalities||["text"]).join(","), (arch.output_modalities||["text"]).join(","),
+          m.created||0, desc ];
+      }
+    }
+  }
+  return { date:(Object.values(latest).sort().pop()||"").slice(0,10), fetchedAt:new Date().toISOString(), rankings, meta };
+}
+async function fetchLive(silent){
+  if (state.refreshing) return;
+  state.refreshing = true;
+  $("#refreshBtn").classList.add("spin");
+  try{
+    const [rankRaw, metaRaw] = await Promise.all([
+      fetchJSON("https://openrouter.ai/api/frontend/v1/rankings/models"),
+      fetchJSON("https://openrouter.ai/api/v1/models").catch(() => null)
+    ]);
+    const live = mergeLive(rankRaw, metaRaw);
+    if (!live.rankings.length) throw new Error("空数据");
+    const oldTotals = new Map(state.models.map(m => [m.slug, m.tok]));
+    window.SNAPSHOT = Object.assign({}, window.SNAPSHOT, live);
+    buildModels(); applyFilters(); renderAll();
+    const changed = state.models.some(m => oldTotals.get(m.slug) !== m.tok);
+    state.live = true;
+    setLiveBadge();
+    setStatus("ok", `<span>✅ 已连接 OpenRouter 实时接口 · 数据日期 <b>${fmtCNDate(state.date)}</b> · 更新于 ${nowStr()}${changed ? " · 数据有更新" : ""}</span>`);
+    if (!silent) toast(changed ? "已刷新，数据有更新 ✨" : "已刷新，数据暂无变化", "ok");
+  }catch(err){
+    state.live = false;
+    setLiveBadge();
+    setStatus("warn", `<span>⚠️ 无法连接实时数据源，当前展示内置快照（数据日期 ${fmtCNDate(state.date)}）· 将自动重试</span><button class="retry" id="retryBtn">立即重试</button>`);
+    $("#retryBtn").addEventListener("click", () => fetchLive(false));
+    if (!silent) toast("实时数据获取失败，已使用离线快照", "err");
+    setTimeout(() => { if (!state.live) fetchLive(true); }, 60000);
+  } finally {
+    state.refreshing = false;
+    $("#refreshBtn").classList.remove("spin");
+  }
+}
+function setLiveBadge(){
+  const b = $("#liveBadge");
+  if (state.live){
+    b.classList.remove("err");
+    b.querySelector("b").innerHTML = 'LIVE · <span>已连接</span>';
+  } else {
+    b.classList.add("err");
+    b.querySelector("b").textContent = "离线快照";
+  }
+}
+
+/* ---------- 自动刷新倒计时 ---------- */
+function startCountdown(){
+  clearInterval(state.timer);
+  state.nextAt = Date.now() + REFRESH_MS;
+  state.timer = setInterval(() => {
+    const left = Math.max(0, state.nextAt - Date.now());
+    const m = Math.floor(left/60000), s = Math.floor(left%60000/1000);
+    $("#countdown").textContent = `自动刷新 ${m}:${String(s).padStart(2,"0")}`;
+    if (left <= 0){ state.nextAt = Date.now() + REFRESH_MS; fetchLive(true); }
+  }, 1000);
+}
+
+/* ---------- 机构下拉 ---------- */
+function renderOrgOptions(){
+  const byOrg = new Map();
+  for (const m of state.models.filter(x => x.isLLM)){
+    const g = byOrg.get(m.org.group) || { name:m.org.name, tok:0 };
+    g.tok += m.tok; byOrg.set(m.org.group, g);
+  }
+  const arr = [...byOrg.entries()].sort((a,b) => b[1].tok - a[1].tok);
+  $("#orgSel").innerHTML = `<option value="all">全部机构（${arr.length}）</option>` +
+    arr.slice(0,30).map(([k,g]) => `<option value="${esc(k)}">${esc(g.name)}</option>`).join("");
+  $("#orgSel").value = state.org;
+}
+
+/* ---------- 全量重绘 ---------- */
+function renderAll(){
+  renderOrgOptions();
+  renderKPIs(); renderPodium(); renderBars(); renderDonut(); renderTable();
+}
+
+/* ---------- 事件绑定 ---------- */
+let qTimer;
+$("#q").addEventListener("input", e => {
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => { state.q = e.target.value; state.shown = 60; applyFilters(); renderTable(); }, 160);
+});
+$("#segKind").addEventListener("click", e => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  $("#segKind").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
+  state.seg = btn.dataset.k; state.shown = 60;
+  applyFilters(); renderAll();
+});
+$("#orgSel").addEventListener("change", e => { state.org = e.target.value; state.shown = 60; applyFilters(); renderAll(); });
+$("#sortSel").addEventListener("change", e => { state.sort = e.target.value; state.shown = 60; applyFilters(); renderTable();
+  $("#boardNote").textContent = { tok:"按 24h Tokens 用量排序", req:"按 24h 调用次数排序", ctx:"按上下文窗口排序", price:"按混合均价升序", new:"按发布时间排序" }[state.sort]; });
+$("#moreBtn").addEventListener("click", () => { state.shown += 60; renderTable(); });
+$("#refreshBtn").addEventListener("click", () => fetchLive(false));
+document.querySelectorAll("thead th[data-s]").forEach(th => th.addEventListener("click", () => {
+  state.sort = th.dataset.s; $("#sortSel").value = state.sort; state.shown = 60; applyFilters(); renderTable();
+}));
+
+/* ---------- 启动 ---------- */
+buildMetaIndex();
+buildModels();
+applyFilters();
+renderAll();
+setStatus("warn", `<span>⏳ 正在连接 OpenRouter 实时接口…（当前为内置快照 · 数据日期 ${fmtCNDate(state.date)}）</span>`);
+startCountdown();
+fetchLive(true);
+</script>
+</body>
+</html>

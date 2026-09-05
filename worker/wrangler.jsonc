@@ -1,0 +1,10 @@
+{
+  "name": "ai-model-ranking",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "../dist"
+  },
+  "routes": [
+    { "pattern": "rank.svenrogue.top", "custom_domain": true }
+  ]
+}
