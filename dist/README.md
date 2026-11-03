@@ -12,7 +12,12 @@
 - **详情抽屉**：点击任意模型查看 24h 用量、调用次数、上下文、价格（输入/输出/混合均价）、变体分布、发布日期等
 - **精美 UI**：极光渐变背景、玻璃拟态卡片、数字滚动动画、粘性表头、骨架屏、Toast 提示，桌面 / 移动端自适应
 
-## 🚀 使用
+## 🌐 线上地址
+
+- **主站**：https://rank.svenrogue.top （Cloudflare Workers 静态资源 + 自定义域名）
+- 备用：https://ai-model-ranking-7y8.pages.dev （Cloudflare Pages）
+
+## 🚀 本地使用
 
 直接**双击 `index.html`** 用浏览器打开即可（Chrome / Edge 均可），无需服务器。
 
@@ -25,13 +30,22 @@
 | `index.html` | 主页面（全部样式与逻辑内联，无外部依赖） |
 | `snapshot.js` | 内置离线快照（真实数据备份，页面打开瞬间先渲染它） |
 | `build_snapshot.py` | 快照生成 / 数据刷新脚本 |
+| `dist/` | 部署目录（index.html + snapshot.js + README） |
+| `worker/wrangler.jsonc` | Workers 部署配置（绑定 rank.svenrogue.top） |
+| `deploy_worker.sh` | 一键部署到 Workers + 自定义域名 |
+| `deploy_cf.sh` | 部署到 Cloudflare Pages（pages.dev） |
+| `cf_api.sh` | Cloudflare API 调试辅助 |
 | `or_models.json` / `or_meta.json` | 上次抓取的原始 API 数据（供离线重建快照） |
 
-## 🔄 手动更新快照
+## 🔄 手动更新快照并重新部署
 
 ```bash
-python build_snapshot.py --refresh   # 重新拉取最新数据并更新 snapshot.js
+python build_snapshot.py --refresh    # 拉最新数据更新 snapshot.js
+cp snapshot.js index.html README.md dist/   # 同步到部署目录
+bash deploy_worker.sh                 # 重新部署上线（约 10 秒）
 ```
+
+页面本身每 5 分钟自动从 OpenRouter 实时拉取数据，此脚本只是更新兜底快照。
 
 ## 📊 数据说明
 
