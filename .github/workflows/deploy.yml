@@ -40,11 +40,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet; then
+          git add snapshot.js dist/index.html dist/snapshot.js dist/README.md
+          if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "快照无变化"
           else
-            git add snapshot.js
             git commit -m "chore: 刷新快照数据 [skip ci]"
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "快照已更新"
